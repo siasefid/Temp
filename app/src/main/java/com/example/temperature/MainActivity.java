@@ -13,7 +13,7 @@ import android.widget.ImageView;
 import android.Manifest;
 
 public class MainActivity extends AppCompatActivity {
-    private Button btn;
+    private Button knapp;
     private EditText ed;
     private ImageView imageView;
 
