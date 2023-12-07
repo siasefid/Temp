@@ -15,6 +15,9 @@ import android.Manifest;
 public class MainActivity extends AppCompatActivity {
     private Button knapp;
     private EditText ed;
+
+    private EditText hej;
+
     private ImageView imageView;
 
     @Override
