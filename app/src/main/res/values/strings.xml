@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">Temperature</string>
-    <string name="tap_mic_to_commend">Tap mic to commend</string>
+    <string name="tap_mic_to_speak">Tap mic to speak</string>
 </resources>
