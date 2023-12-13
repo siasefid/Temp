@@ -74,10 +74,16 @@ public class MainActivity extends AppCompatActivity {
         String spokenText = results.get(0);
 
         if (spokenText.toLowerCase().indexOf("room 2") !=-1) {
-            text.setText("Room 2 temperature is: " + ROOM_2 + "°C");
+            text.setText("Room 2's temperature is: " + ROOM_2 + "°C");
         }
         else if (spokenText.toLowerCase().indexOf("room 3") !=-1) {
-            text.setText("Room 3 temperature is: " + ROOM_3 + "°C");
+            text.setText("Room 3's temperature is: " + ROOM_3 + "°C");
+        }
+        else if (spokenText.toLowerCase().indexOf("all") !=-1) {
+            text.setText("Your rooms" + "\n" + "\n" + "Room 2: " + ROOM_2 + "°C" + "\n" + "Room 3: " + ROOM_3 + "°C");
+        }
+        else if (spokenText.toLowerCase().indexOf("thank") !=-1) {
+            text.setText("You're welcome! :)");
         }
         else {
             text.setText("command not found");
