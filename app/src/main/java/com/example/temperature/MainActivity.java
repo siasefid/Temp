@@ -35,7 +35,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private TextToSpeech toSpeech;
     private ArrayList<String> results;
     private String spokenText;
-    private final int optimaltemp1 = 10;
+    private final int optimalTemp = 10;
 
 
     @Override
@@ -90,7 +90,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             text.setText("Your rooms" + "\n" + "\n" + "Room 2: " + ROOM_2 + "°C" + "\n" + "Room 3: " + ROOM_3 + "°C");
         } else if (spokenText.toLowerCase().indexOf("set temp") != -1) {
             if (currentTime.isAfter(LocalTime.of(8, 0)) && currentTime.isBefore(LocalTime.of(16, 0))) {
-                text.setText("Temperature has been sat based on your scheduleTemp which is" + optimaltemp1 + "°C");
+                text.setText("Temperature has been sat based on your scheduleTemp which is" + optimalTemp + "°C");
             } else {
                 text.setText("what temp");
             }
