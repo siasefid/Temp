@@ -8,8 +8,11 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.StrictMode;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
 import android.util.Log;
@@ -17,25 +20,42 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.Manifest;
+import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Locale;
+
+import ch.ethz.ssh2.Connection;
+import ch.ethz.ssh2.Session;
+import ch.ethz.ssh2.StreamGobbler;
 
 @RequiresApi(api = Build.VERSION_CODES.O)
 public class MainActivity extends AppCompatActivity implements TextToSpeech.OnInitListener {
     private static final int SPEECH_REQUEST_CODE = 100;
     private static final int ROOM_2 = 20;
     private static final int ROOM_3 = 23;
+    private static final int ROOM_1_SIZE = 20;
+    private static final int ROOM_2_SIZE = 25;
+    private static final int ROOM_3_SIZE = 30;
+    private static final int OPTIMAL_TEMP = 10;
     private ToggleButton btn;
     private EditText text;
     private ImageView mic;
     private TextToSpeech toSpeech;
     private ArrayList<String> results;
     private String spokenText;
-    private final int optimalTemp = 10;
+    private String outputValue = "";
+    private Handler handler = new Handler();
 
 
     @Override
@@ -79,29 +99,90 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         super.onActivityResult(requestCode, resultCode, data);
         results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
         spokenText = results.get(0);
-        LocalTime currentTime = LocalTime.now();
-
-
-        if (spokenText.toLowerCase().indexOf("room 2") != -1) {
-            text.setText("Room 2's temperature is: " + ROOM_2 + "°C");
-        } else if (spokenText.toLowerCase().indexOf("room 3") != -1) {
-            text.setText("Room 3's temperature is: " + ROOM_3 + "°C");
-        } else if (spokenText.toLowerCase().indexOf("all") != -1) {
-            text.setText("Your rooms" + "\n" + "\n" + "Room 2: " + ROOM_2 + "°C" + "\n" + "Room 3: " + ROOM_3 + "°C");
-        } else if (spokenText.toLowerCase().indexOf("set temp") != -1) {
-            if (currentTime.isAfter(LocalTime.of(8, 0)) && currentTime.isBefore(LocalTime.of(16, 0))) {
-                text.setText("Temperature has been sat based on your scheduleTemp which is" + optimalTemp + "°C");
-            } else {
-                text.setText("what temp");
-            }
-        } else if (spokenText.toLowerCase().indexOf("thank") != -1) {
-            text.setText("You're welcome! :)");
-        } else {
-            text.setText("command not found");
-        }
-        textToSpeech(text.getText().toString());
+        voiceCommands(spokenText);
         btn.setChecked(false);
         btn.setBackgroundColor(Color.RED);
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                textToSpeech(text.getText().toString());
+            }
+        },2500);
+    }
+    private void voiceCommands(String command){
+        switch (command.toLowerCase()) {
+            case "room 1":
+            case "room one":
+                room1Command();
+                break;
+            case "room 2":
+                delayText("Room 2's temperature is: " + ROOM_2 + "°");
+                break;
+            case "room 3":
+                delayText("Room 3's temperature is: " + ROOM_3 + "°");
+                break;
+            case "all rooms":
+                allRoomsCommand();
+                break;
+            case "temperature set":
+                temperatureSetCommand();
+                break;
+            case "thank you":
+                text.setText("You're welcome!");
+                textToSpeech("You're welcome!");
+                break;
+            default:
+                break;
+        }
+    }
+    private void room1Command(){
+        new AsyncTask<Integer, Void, Void>() {
+            @Override
+            protected Void doInBackground(Integer... params) {
+                run("python listsensors.py");
+                return null;
+            }
+
+            @Override
+            protected void onPostExecute(Void v) {
+                text.setText("Room 1's temperature is: " + outputValue);
+                textToSpeech("Room 1's temperature is: " + outputValue);
+            }
+        }.execute(1);
+    }
+    private void allRoomsCommand(){
+        new AsyncTask<Integer, Void, Void>(){
+            @Override
+            protected Void doInBackground(Integer... params) {
+                run("python listsensors.py");
+                return null;            }
+            @Override
+            protected void onPostExecute(Void v) {
+                text.setText("Your rooms\n\n" +
+                        String.format("Room 1: " + outputValue) + "\n" +
+                        "Room 2: " + ROOM_2 + "°" + "\n" +
+                        "Room 3: " + ROOM_3 + "°");
+                textToSpeech("Your rooms\n\n" +
+                        String.format("Room 1: " + outputValue) +"\n" +
+                        "Room 2: " + ROOM_2 + "°" + "\n" +
+                        "Room 3: " + ROOM_3 + "°");
+            }
+        }.execute(1);
+    }
+    private void temperatureSetCommand(){
+        ZoneId zoneId = ZoneId.of("GMT+1");
+        ZonedDateTime currentDateTime = ZonedDateTime.now(zoneId);
+        LocalTime currentTime = currentDateTime.toLocalTime();
+
+        if (currentTime.isAfter(LocalTime.of(8, 0)) && currentTime.isBefore(LocalTime.of(16, 0))) {
+            delayText("Based on your schedule you are not at home right now.\n\n" +
+                    "Therefore, all rooms will be set to a temperature of " + OPTIMAL_TEMP + "°");
+        } else {
+            delayText("The optimal temperatures have been set to your rooms based on their sizes:\n\n" +
+                    "Room 1 of size " + ROOM_1_SIZE + " square metres " + "to: " + getRoom1Temp() + "°" + "\n" +
+                    "Room 2 of size " + ROOM_2_SIZE + " square metres " + "to: " + getRoom2Temp() + "°" + "\n" +
+                    "Room 3 of size " + ROOM_3_SIZE + " square metres " + "to: " + getRoom3Temp() + "°");
+        }
     }
 
     @Override
@@ -119,10 +200,78 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
     private void textToSpeech(String t) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            toSpeech.setSpeechRate(0.5F);
+            toSpeech.setSpeechRate(0.7F);
             toSpeech.speak(t, TextToSpeech.QUEUE_FLUSH, null, null);
         } else {
             toSpeech.speak(t, TextToSpeech.QUEUE_FLUSH, null);
         }
+    }
+    private int getRoom1Temp(){
+        return (ROOM_1_SIZE/2) + 8;
+    }
+    private int getRoom2Temp(){
+        return (ROOM_2_SIZE/2) + 8;
+    }
+    private int getRoom3Temp(){
+        return (ROOM_3_SIZE/2) + 8;
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Cancel any pending Handler tasks when the activity is paused
+        handler.removeCallbacksAndMessages(null);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Cancel any pending Handler tasks when the activity is destroyed
+        handler.removeCallbacksAndMessages(null);
+    }
+
+    public void run(String command) {
+        StringBuilder output = new StringBuilder();
+        String hostname = "raspberrypi";
+        String username = "pi";
+        String password = "pi";
+        try {
+            Connection conn = new Connection(hostname);
+            conn.connect();
+            boolean isAuthenticated = conn.authenticateWithPassword(username, password);
+            if (isAuthenticated == false)
+                throw new IOException("Authentication failed.");
+            Session sess = conn.openSession();
+            sess.execCommand(command);
+            InputStream stdout = new StreamGobbler(sess.getStdout());
+            BufferedReader br = new BufferedReader(new InputStreamReader(stdout));
+
+            while (true) {
+                String line = br.readLine();
+                if (line == null)
+                    break;
+                System.out.println(line);
+                output.append(line);
+            }
+            outputValue = output.toString();
+
+            System.out.println("ExitCode: " + sess.getExitStatus());
+            sess.close();
+            conn.close();
+        } catch (IOException e) {
+            e.printStackTrace(System.err);
+            System.exit(2);
+        }
+        StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+        StrictMode.setThreadPolicy(policy);
+    }
+    private void delayText(String t){
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                text.setText(t);
+            }
+        },2500);
+
     }
 }
