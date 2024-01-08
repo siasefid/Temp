@@ -20,7 +20,6 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.Manifest;
-import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
@@ -28,10 +27,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -56,7 +55,8 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private String spokenText;
     private String outputValue = "";
     private Handler handler = new Handler();
-
+    private LocalTime scheduleStart;
+    private LocalTime scheduleEnd;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,8 +79,6 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         });
 
     }
-
-
     private void startSpeechRecognition(String prompt) {
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
@@ -100,6 +98,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
         spokenText = results.get(0);
         voiceCommands(spokenText);
+        voiceCommands(spokenText);
         btn.setChecked(false);
         btn.setBackgroundColor(Color.RED);
         new Handler().postDelayed(new Runnable() {
@@ -109,30 +108,42 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             }
         },2500);
     }
-    private void voiceCommands(String command){
-        switch (command.toLowerCase()) {
-            case "room 1":
-            case "room one":
-                room1Command();
-                break;
-            case "room 2":
-                delayText("Room 2's temperature is: " + ROOM_2 + "°");
-                break;
-            case "room 3":
-                delayText("Room 3's temperature is: " + ROOM_3 + "°");
-                break;
-            case "all rooms":
-                allRoomsCommand();
-                break;
-            case "temperature set":
-                temperatureSetCommand();
-                break;
-            case "thank you":
-                text.setText("You're welcome!");
-                textToSpeech("You're welcome!");
-                break;
-            default:
-                break;
+    private void voiceCommands(String command) {
+        String baseCommand = "schedule set";
+        if (command.toLowerCase().contains(baseCommand)) {
+            if (command.contains("to")) {
+                scheduleSetCommand(command);
+            }
+            else{
+                delayText("No such command");
+            }
+        } else {
+            switch (command.toLowerCase()) {
+                case "room 1":
+                case "room one":
+                    room1Command();
+                    break;
+                case "room 2":
+                case "room two":
+                    delayText("Room 2's temperature is: " + ROOM_2 + "°");
+                    break;
+                case "room 3":
+                case "room three":
+                    delayText("Room 3's temperature is: " + ROOM_3 + "°");
+                    break;
+                case "all rooms":
+                    allRoomsCommand();
+                    break;
+                case "temperature set":
+                    temperatureSetCommand();
+                    break;
+                case "thank you":
+                    delayText("You're welcome!");
+                    break;
+                default:
+                    delayText("No such command");
+                    break;
+            }
         }
     }
     private void room1Command(){
@@ -174,17 +185,43 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         ZonedDateTime currentDateTime = ZonedDateTime.now(zoneId);
         LocalTime currentTime = currentDateTime.toLocalTime();
 
-        if (currentTime.isAfter(LocalTime.of(8, 0)) && currentTime.isBefore(LocalTime.of(16, 0))) {
-            delayText("Based on your schedule you are not at home right now.\n\n" +
+        //when no schedule has been set
+        if(scheduleStart == null && scheduleEnd == null){
+            delayText("The optimal temperatures have been set to your rooms based on their sizes:\n\n" +
+                    "Room 1 of size " + ROOM_1_SIZE + " square meters to: " + getRoom1Temp() + "°" + "\n" +
+                    "Room 2 of size " + ROOM_2_SIZE + " square meters to: " + getRoom2Temp() + "°" + "\n" +
+                    "Room 3 of size " + ROOM_3_SIZE + " square meters to: " + getRoom3Temp() + "°");
+            // Inside the user's schedule
+        }else if (currentTime.isAfter(scheduleStart) && currentTime.isBefore(scheduleEnd)) {
+            delayText("Based on your schedule, you are not at home right now.\n\n" +
                     "Therefore, all rooms will be set to a temperature of " + OPTIMAL_TEMP + "°");
+            // Outside the user's schedule
         } else {
             delayText("The optimal temperatures have been set to your rooms based on their sizes:\n\n" +
-                    "Room 1 of size " + ROOM_1_SIZE + " square metres " + "to: " + getRoom1Temp() + "°" + "\n" +
-                    "Room 2 of size " + ROOM_2_SIZE + " square metres " + "to: " + getRoom2Temp() + "°" + "\n" +
-                    "Room 3 of size " + ROOM_3_SIZE + " square metres " + "to: " + getRoom3Temp() + "°");
+                    "Room 1 of size " + ROOM_1_SIZE + " square meters to: " + getRoom1Temp() + "°" + "\n" +
+                    "Room 2 of size " + ROOM_2_SIZE + " square meters to: " + getRoom2Temp() + "°" + "\n" +
+                    "Room 3 of size " + ROOM_3_SIZE + " square meters to: " + getRoom3Temp() + "°");
         }
     }
+    private void scheduleSetCommand(String spokenText) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("H[:mm]");
+        // Extract the time portion from the spoken text
+        String timeText = spokenText.replaceFirst("schedule set", "").trim();
 
+        // Split the time portion into start and end time strings
+        String[] tokens = timeText.split("to");
+        if (tokens.length == 2) {
+            String startTime = tokens[0].trim();
+            String endTime = tokens[1].trim();
+
+            scheduleStart = LocalTime.parse(startTime, formatter);
+            scheduleEnd = LocalTime.parse(endTime, formatter);
+            delayText("Your schedule has been set from " + scheduleStart + " to " + scheduleEnd);
+        }
+        else{
+            delayText("Couldn't get your schedule. Please try again");
+        }
+    }
     @Override
     public void onInit(int i) {
         if (i == TextToSpeech.SUCCESS) {
@@ -197,10 +234,9 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             }
         }
     }
-
     private void textToSpeech(String t) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            toSpeech.setSpeechRate(0.7F);
+            toSpeech.setSpeechRate(0.5F);
             toSpeech.speak(t, TextToSpeech.QUEUE_FLUSH, null, null);
         } else {
             toSpeech.speak(t, TextToSpeech.QUEUE_FLUSH, null);
@@ -272,6 +308,5 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
                 text.setText(t);
             }
         },2500);
-
     }
 }
